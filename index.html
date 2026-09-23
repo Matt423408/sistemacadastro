@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FleetControl · Gestão de Frota Veicular</title>
+    <meta name="description" content="Sistema moderno de gestão de frota veicular integrado ao Supabase">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%236366f1'/%3E%3Cpath d='M12 38V24a4 4 0 014-4h20v18H12zm24-12h8l8 8v4H36V26z' fill='%23fff'/%3E%3Ccircle cx='22' cy='44' r='5' fill='%230f172a'/%3E%3Ccircle cx='46' cy='44' r='5' fill='%230f172a'/%3E%3C/svg%3E">
+
+    <!-- Tipografia Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Ícones -->
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+
+    <!-- Tailwind CSS (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Personalização da paleta Slate / Indigo solicitada
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
+                    colors: {
+                        slate: {
+                            50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1',
+                            400: '#94a3b8', 500: '#64748b', 600: '#475569', 700: '#334155',
+                            800: '#1e293b', 900: '#0f172a', 950: '#0f172a'
+                        },
+                        indigo: {
+                            300: '#a5b4fc', 400: '#818cf8', 500: '#6366f1',
+                            600: '#4f46e5', 700: '#4338ca'
+                        }
+                    },
+                    boxShadow: {
+                        glow: '0 0 0 1px rgba(99,102,241,.35), 0 10px 40px -10px rgba(99,102,241,.45)'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-slate-950 text-slate-200 font-sans min-h-screen antialiased">
+
+    <!-- ================= HEADER ================= -->
+    <header id="app-header" class="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+            <a href="#" class="brand flex items-center gap-3">
+                <span class="brand-logo w-10 h-10 rounded-xl bg-indigo-500 text-white grid place-items-center shadow-glow">
+                    <i class="fas fa-truck-fast text-lg"></i>
+                </span>
+                <span class="leading-tight">
+                    <span class="block text-base sm:text-lg font-bold tracking-tight text-white">FleetControl</span>
+                    <span class="block text-[11px] sm:text-xs text-slate-400 font-medium">Gestão de Frota Veicular</span>
+                </span>
+            </a>
+
+            <nav class="flex items-center gap-2 sm:gap-3">
+                <span id="connection-status" class="hidden sm:inline-flex items-center gap-2 text-xs font-medium text-slate-400 px-3 py-1.5 rounded-full border border-slate-800 bg-slate-900">
+                    <span class="status-dot w-2 h-2 rounded-full bg-slate-500"></span>
+                    <span id="connection-label">Conectando…</span>
+                </span>
+                <button id="btn-refresh" type="button" title="Atualizar dados"
+                    class="w-9 h-9 grid place-items-center rounded-lg border border-slate-800 bg-slate-900 text-slate-300 hover:text-white hover:border-indigo-500 transition">
+                    <i class="fas fa-rotate"></i>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <main id="app-main" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8">
+
+        <!-- ================= DASHBOARD STATS ================= -->
+        <section id="dashboard-stats" aria-label="Indicadores da frota" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <article class="stat-card group">
+                <div class="stat-icon bg-indigo-500/15 text-indigo-400"><i class="fas fa-truck"></i></div>
+                <div>
+                    <p class="stat-label">Total de Veículos</p>
+                    <p id="stat-total" class="stat-value skeleton-text">—</p>
+                </div>
+            </article>
+            <article class="stat-card group">
+                <div class="stat-icon bg-emerald-500/15 text-emerald-400"><i class="fas fa-circle-check"></i></div>
+                <div>
+                    <p class="stat-label">Ativos</p>
+                    <p id="stat-ativos" class="stat-value skeleton-text">—</p>
+                </div>
+            </article>
+            <article class="stat-card group">
+                <div class="stat-icon bg-amber-500/15 text-amber-400"><i class="fas fa-screwdriver-wrench"></i></div>
+                <div>
+                    <p class="stat-label">Em Manutenção</p>
+                    <p id="stat-manutencao" class="stat-value skeleton-text">—</p>
+                </div>
+            </article>
+        </section>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 items-start">
+
+            <!-- ================= FORM SECTION ================= -->
+            <section id="form-section" class="surface lg:col-span-1 lg:sticky lg:top-24">
+                <header class="flex items-center justify-between mb-5">
+                    <h2 class="section-title"><i class="fas fa-plus text-indigo-400"></i> Novo Veículo</h2>
+                </header>
+
+                <form id="form-veiculo" class="space-y-4" novalidate>
+                    <div class="field">
+                        <label for="marca">Marca</label>
+                        <input type="text" id="marca" name="marca" placeholder="Ex.: Volvo" required maxlength="60" autocomplete="off">
+                    </div>
+
+                    <div class="field">
+                        <label for="modelo">Modelo</label>
+                        <input type="text" id="modelo" name="modelo" placeholder="Ex.: FH 540" required maxlength="80" autocomplete="off">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="field">
+                            <label for="placa">Placa</label>
+                            <input type="text" id="placa" name="placa" placeholder="ABC-1234" required maxlength="8" class="uppercase" autocomplete="off">
+                        </div>
+                        <div class="field">
+                            <label for="ano">Ano</label>
+                            <input type="number" id="ano" name="ano" placeholder="2024" required min="1950" max="2100" inputmode="numeric">
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label for="status">Status</label>
+                        <select id="status" name="status" required>
+                            <option value="Ativo">Ativo</option>
+                            <option value="Manutenção">Manutenção</option>
+                            <option value="Inativo">Inativo</option>
+                        </select>
+                    </div>
+
+                    <p id="form-error" class="hidden text-sm text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2" role="alert"></p>
+
+                    <button id="btn-submit" type="submit" class="btn-primary w-full">
+                        <span class="btn-label"><i class="fas fa-floppy-disk"></i> Cadastrar Veículo</span>
+                        <span class="btn-loading hidden"><i class="fas fa-spinner fa-spin"></i> Salvando…</span>
+                    </button>
+                </form>
+            </section>
+
+            <!-- ================= MAIN CONTENT ================= -->
+            <section id="list-section" class="surface lg:col-span-2">
+                <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
+                    <h2 class="section-title"><i class="fas fa-list text-indigo-400"></i> Frota Cadastrada
+                        <span id="list-count" class="ml-1 text-xs font-semibold text-indigo-300 bg-indigo-500/15 px-2 py-0.5 rounded-full">0</span>
+                    </h2>
+
+                    <div class="flex flex-col sm:flex-row gap-3 sm:items-center">
+                        <div class="relative">
+                            <i class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
+                            <input type="search" id="search-input" placeholder="Buscar placa, modelo, marca…"
+                                class="pl-9 pr-3 py-2 w-full sm:w-64 rounded-lg bg-slate-900 border border-slate-700 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition">
+                        </div>
+                        <select id="filter-status"
+                            class="py-2 px-3 rounded-lg bg-slate-900 border border-slate-700 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition">
+                            <option value="">Todos os status</option>
+                            <option value="Ativo">Ativo</option>
+                            <option value="Manutenção">Manutenção</option>
+                            <option value="Inativo">Inativo</option>
+                        </select>
+                    </div>
+                </header>
+
+                <!-- Tabela -->
+                <div class="table-wrapper rounded-xl border border-slate-700/70 overflow-hidden shadow-xl">
+                    <div class="overflow-x-auto">
+                        <table id="vehicles-table" class="min-w-full text-sm">
+                            <thead class="bg-slate-900/80 text-slate-400 text-xs uppercase tracking-wider">
+                                <tr>
+                                    <th class="text-left">Veículo</th>
+                                    <th class="text-left">Placa</th>
+                                    <th class="text-left hidden md:table-cell">Ano</th>
+                                    <th class="text-left">Status</th>
+                                    <th class="text-left hidden lg:table-cell">Cadastro</th>
+                                    <th class="text-right">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="vehicles-body" class="divide-y divide-slate-800">
+                                <!-- Linhas geradas via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Estado: carregando -->
+                    <div id="state-loading" class="state-box">
+                        <i class="fas fa-spinner fa-spin text-2xl text-indigo-400"></i>
+                        <p>Carregando frota…</p>
+                    </div>
+
+                    <!-- Estado: vazio -->
+                    <div id="state-empty" class="state-box hidden">
+                        <i class="fas fa-truck-ramp-box text-3xl text-slate-600"></i>
+                        <p class="text-slate-400">Nenhum veículo encontrado.</p>
+                        <p class="text-xs text-slate-500">Cadastre o primeiro veículo usando o formulário.</p>
+                    </div>
+
+                    <!-- Estado: erro -->
+                    <div id="state-error" class="state-box hidden">
+                        <i class="fas fa-triangle-exclamation text-3xl text-rose-400"></i>
+                        <p class="text-rose-300 font-medium">Não foi possível carregar os dados.</p>
+                        <p id="state-error-message" class="text-xs text-slate-500 max-w-md"></p>
+                        <button id="btn-retry" type="button" class="btn-secondary mt-2"><i class="fas fa-rotate"></i> Tentar novamente</button>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer id="app-footer" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 text-center text-xs text-slate-500">
+        FleetControl · HTML + CSS + JavaScript · Dados persistidos no <span class="text-slate-300 font-medium">Supabase</span>
+    </footer>
+
+    <!-- ================= MODAL: EDITAR VEÍCULO ================= -->
+    <div id="modal-edit" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-edit-title">
+        <div class="modal-backdrop" data-close-modal></div>
+        <div class="modal-panel surface">
+            <header class="flex items-center justify-between mb-5">
+                <h3 id="modal-edit-title" class="section-title"><i class="fas fa-pen-to-square text-indigo-400"></i> Editar Veículo</h3>
+                <button type="button" class="icon-btn" data-close-modal aria-label="Fechar"><i class="fas fa-xmark"></i></button>
+            </header>
+
+            <form id="form-edit" class="space-y-4" novalidate>
+                <input type="hidden" id="edit-id">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="field">
+                        <label for="edit-marca">Marca</label>
+                        <input type="text" id="edit-marca" required maxlength="60">
+                    </div>
+                    <div class="field">
+                        <label for="edit-modelo">Modelo</label>
+                        <input type="text" id="edit-modelo" required maxlength="80">
+                    </div>
+                    <div class="field">
+                        <label for="edit-placa">Placa</label>
+                        <input type="text" id="edit-placa" required maxlength="8" class="uppercase">
+                    </div>
+                    <div class="field">
+                        <label for="edit-ano">Ano</label>
+                        <input type="number" id="edit-ano" required min="1950" max="2100">
+                    </div>
+                    <div class="field sm:col-span-2">
+                        <label for="edit-status">Status</label>
+                        <select id="edit-status" required>
+                            <option value="Ativo">Ativo</option>
+                            <option value="Manutenção">Manutenção</option>
+                            <option value="Inativo">Inativo</option>
+                        </select>
+                    </div>
+                </div>
+
+                <p id="edit-error" class="hidden text-sm text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2" role="alert"></p>
+
+                <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
+                    <button type="button" class="btn-secondary" data-close-modal>Cancelar</button>
+                    <button id="btn-edit-submit" type="submit" class="btn-primary">
+                        <span class="btn-label"><i class="fas fa-check"></i> Salvar alterações</span>
+                        <span class="btn-loading hidden"><i class="fas fa-spinner fa-spin"></i> Salvando…</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================= MODAL: CONFIRMAR EXCLUSÃO ================= -->
+    <div id="modal-delete" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-delete-title">
+        <div class="modal-backdrop" data-close-modal></div>
+        <div class="modal-panel surface max-w-md">
+            <div class="flex items-start gap-4">
+                <span class="w-11 h-11 shrink-0 rounded-xl bg-rose-500/15 text-rose-400 grid place-items-center text-xl">
+                    <i class="fas fa-trash-can"></i>
+                </span>
+                <div class="flex-1">
+                    <h3 id="modal-delete-title" class="text-lg font-bold text-white">Excluir veículo?</h3>
+                    <p class="text-sm text-slate-400 mt-1">Esta ação é permanente e não pode ser desfeita.</p>
+                    <p id="delete-target" class="mt-3 text-sm font-semibold text-slate-200 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2"></p>
+                </div>
+            </div>
+            <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 mt-6">
+                <button type="button" class="btn-secondary" data-close-modal>Cancelar</button>
+                <button id="btn-delete-confirm" type="button" class="btn-danger">
+                    <span class="btn-label"><i class="fas fa-trash-can"></i> Excluir</span>
+                    <span class="btn-loading hidden"><i class="fas fa-spinner fa-spin"></i> Excluindo…</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= TOASTS ================= -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 w-[calc(100%-2rem)] sm:w-80" aria-live="polite"></div>
+
+    <!-- SUPABASE CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Script da aplicação (parâmetro de versão evita cache no GitHub Pages) -->
+    <script src="script.js?v=1"></script>
+</body>
+</html>
