@@ -17,7 +17,6 @@
     <!-- Tailwind CSS (CDN) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        // Personalização da paleta Slate / Indigo solicitada
         tailwind.config = {
             darkMode: 'class',
             theme: {
@@ -44,7 +43,7 @@
 
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-slate-950 text-slate-200 font-sans min-h-screen antialiased">
+<body class="bg-slate-950 text-slate-200 font-sans min-h-screen antialiased flex flex-col justify-between">
 
     <!-- ================= HEADER ================= -->
     <header id="app-header" class="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur">
@@ -64,6 +63,16 @@
                     <span class="status-dot w-2 h-2 rounded-full bg-slate-500"></span>
                     <span id="connection-label">Conectando…</span>
                 </span>
+
+                <!-- Área do usuário autenticado -->
+                <div id="user-info" class="hidden flex items-center gap-3 border-l border-slate-800 pl-3">
+                    <span id="user-email" class="text-xs text-slate-300 font-medium hidden md:inline"></span>
+                    <button id="btn-logout" type="button" title="Sair do sistema"
+                        class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/30 hover:bg-rose-500/20 transition flex items-center gap-1.5">
+                        <i class="fas fa-right-from-bracket"></i> Sair
+                    </button>
+                </div>
+
                 <button id="btn-refresh" type="button" title="Atualizar dados"
                     class="w-9 h-9 grid place-items-center rounded-lg border border-slate-800 bg-slate-900 text-slate-300 hover:text-white hover:border-indigo-500 transition">
                     <i class="fas fa-rotate"></i>
@@ -72,7 +81,40 @@
         </div>
     </header>
 
-    <main id="app-main" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8">
+    <!-- ================= TELA DE LOGIN ================= -->
+    <section id="login-section" class="flex-1 flex items-center justify-center px-4 py-12">
+        <div class="surface w-full max-w-md space-y-6">
+            <div class="text-center space-y-2">
+                <div class="inline-grid place-items-center w-12 h-12 rounded-xl bg-indigo-500/15 text-indigo-400 text-2xl mb-1">
+                    <i class="fas fa-lock"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-white">Área Restrita</h1>
+                <p class="text-sm text-slate-400">Entre com suas credenciais para acessar a frota</p>
+            </div>
+
+            <form id="form-login" class="space-y-4" novalidate>
+                <div class="field">
+                    <label for="login-email">E-mail</label>
+                    <input type="email" id="login-email" required placeholder="seu@email.com" autocomplete="username">
+                </div>
+
+                <div class="field">
+                    <label for="login-password">Senha</label>
+                    <input type="password" id="login-password" required placeholder="••••••••" autocomplete="current-password">
+                </div>
+
+                <p id="login-error" class="hidden text-sm text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2" role="alert"></p>
+
+                <button id="btn-login" type="submit" class="btn-primary w-full">
+                    <span class="btn-label"><i class="fas fa-right-to-bracket"></i> Entrar</span>
+                    <span class="btn-loading hidden"><i class="fas fa-spinner fa-spin"></i> Autenticando…</span>
+                </button>
+            </form>
+        </div>
+    </section>
+
+    <!-- ================= DASHBOARD PRINCIPAL (RESTRITO) ================= -->
+    <main id="app-main" class="hidden max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8 flex-1 w-full">
 
         <!-- ================= DASHBOARD STATS ================= -->
         <section id="dashboard-stats" aria-label="Indicadores da frota" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -216,7 +258,7 @@
     </main>
 
     <footer id="app-footer" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 text-center text-xs text-slate-500">
-        FleetControl · HTML + CSS + JavaScript · Dados persistidos no <span class="text-slate-300 font-medium">Supabase</span>
+        FleetControl · HTML + CSS + JavaScript · Autenticação & Dados no <span class="text-slate-300 font-medium">Supabase</span>
     </footer>
 
     <!-- ================= MODAL: EDITAR VEÍCULO ================= -->
@@ -299,7 +341,6 @@
 
     <!-- SUPABASE CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- Script da aplicação (parâmetro de versão evita cache no GitHub Pages) -->
-    <script src="script.js?v=1"></script>
+    <script src="script.js?v=2"></script>
 </body>
 </html>
