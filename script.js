@@ -1,31 +1,26 @@
 // =====================================================================
 //  FleetControl — Sistema de Gestão de Frota Veicular
-//  Camada de dados: Supabase (@supabase/supabase-js v2 via CDN)
+//  Camada de dados e Autenticação: Supabase Auth (@supabase/supabase-js v2)
 // =====================================================================
 
-// ---------------------------------------------------------------------
-// 🔧 CONFIGURAÇÃO DO SUPABASE
-//    Painel do Supabase → Project Settings → API
-//    A "anon key" é pública por definição; a segurança fica nas políticas RLS.
-// ---------------------------------------------------------------------
 const SUPABASE_URL = 'https://yvehrnvjwrkiwloazybz.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl2ZWhybnZqd3JraXdsb2F6eWJ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxOTg0NDcsImV4cCI6MjEwODc3NDQ0N30.r8QmnePMgFPCbQPgAzSMAylwcDhcLcrvchHmHPTtA5U';
 
 const TABLE = 'veiculos';
 const STATUS_OPTIONS = ['Ativo', 'Manutenção', 'Inativo'];
 
-// Não usar o nome "supabase" para não conflitar com window.supabase (CDN)
 const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ---------------------------------------------------------------------
 // ESTADO DA APLICAÇÃO
 // ---------------------------------------------------------------------
 const state = {
-    veiculos: [],        // dados brutos vindos do Supabase
+    user: null,          // Usuário autenticado pelo Supabase Auth
+    veiculos: [],        // dados brutos
     search: '',          // termo de busca
-    filterStatus: '',    // filtro por status ('' = todos)
-    deleteTarget: null,  // veículo aguardando confirmação de exclusão
-    lastInsertedId: null // para animar a linha recém-criada
+    filterStatus: '',    // filtro por status
+    deleteTarget: null,  // veículo aguardando exclusão
+    lastInsertedId: null
 };
 
 // ---------------------------------------------------------------------
@@ -34,18 +29,33 @@ const state = {
 const $ = (sel) => document.querySelector(sel);
 
 const el = {
+    // auth
+    loginSection: $('#login-section'),
+    appMain: $('#app-main'),
+    formLogin: $('#form-login'),
+    loginEmail: $('#login-email'),
+    loginPassword: $('#login-password'),
+    loginError: $('#login-error'),
+    btnLogin: $('#btn-login'),
+    userInfo: $('#user-info'),
+    userEmail: $('#user-email'),
+    btnLogout: $('#btn-logout'),
+
     // stats
     statTotal: $('#stat-total'),
     statAtivos: $('#stat-ativos'),
     statManutencao: $('#stat-manutencao'),
+
     // header
     connStatus: $('#connection-status'),
     connLabel: $('#connection-label'),
     btnRefresh: $('#btn-refresh'),
-    // formulário
+
+    // formulário de veículos
     form: $('#form-veiculo'),
     formError: $('#form-error'),
     btnSubmit: $('#btn-submit'),
+
     // listagem
     tbody: $('#vehicles-body'),
     listCount: $('#list-count'),
@@ -56,29 +66,103 @@ const el = {
     stateError: $('#state-error'),
     stateErrorMsg: $('#state-error-message'),
     btnRetry: $('#btn-retry'),
+
     // modal editar
     modalEdit: $('#modal-edit'),
     formEdit: $('#form-edit'),
     editError: $('#edit-error'),
     btnEditSubmit: $('#btn-edit-submit'),
+
     // modal excluir
     modalDelete: $('#modal-delete'),
     deleteTarget: $('#delete-target'),
     btnDeleteConfirm: $('#btn-delete-confirm'),
+
     // toasts
     toasts: $('#toast-container')
 };
 
 // =====================================================================
+//  SISTEMA DE AUTENTICAÇÃO (SUPABASE AUTH)
+// =====================================================================
+
+async function handleLogin(e) {
+    e.preventDefault();
+    hideError(el.loginError);
+
+    const email = el.loginEmail.value.trim();
+    const password = el.loginPassword.value;
+
+    if (!email || !password) {
+        return showError(el.loginError, 'Por favor, preencha o e-mail e a senha.');
+    }
+
+    setLoading(el.btnLogin, true);
+
+    try {
+        const { data, error } = await dbClient.auth.signInWithPassword({
+            email,
+            password
+        });
+
+        if (error) throw error;
+
+        toast('success', `Bem-vindo, <b>${escapeHtml(data.user.email)}</b>!`);
+        el.formLogin.reset();
+    } catch (err) {
+        console.error('Erro no login:', err);
+        showError(el.loginError, friendlyAuthError(err));
+    } finally {
+        setLoading(el.btnLogin, false);
+    }
+}
+
+async function handleLogout() {
+    try {
+        const { error } = await dbClient.auth.signOut();
+        if (error) throw error;
+        toast('info', 'Você saiu do sistema.');
+    } catch (err) {
+        toast('error', friendlyError(err));
+    }
+}
+
+function updateUIForAuth(session) {
+    if (session && session.user) {
+        state.user = session.user;
+        el.loginSection.classList.add('hidden');
+        el.appMain.classList.remove('hidden');
+        el.userInfo.classList.remove('hidden');
+        el.userEmail.textContent = session.user.email;
+        fetchVeiculos();
+    } else {
+        state.user = null;
+        state.veiculos = [];
+        el.appMain.classList.add('hidden');
+        el.userInfo.classList.add('hidden');
+        el.loginSection.classList.remove('hidden');
+        setConnection('offline', 'Não autenticado');
+    }
+}
+
+function friendlyAuthError(err) {
+    if (!err) return 'Erro ao realizar login.';
+    if (err.message.includes('Invalid login credentials')) {
+        return 'E-mail ou senha incorretos.';
+    }
+    if (err.message.includes('Email not confirmed')) {
+        return 'E-mail não confirmado no Supabase.';
+    }
+    return err.message || String(err);
+}
+
+// =====================================================================
 //  FUNÇÕES CORE (CRUD)
 // =====================================================================
 
-/**
- * fetchVeiculos()
- * Recupera todos os veículos (ordenados por data_cadastro desc),
- * atualiza o DOM e os contadores de estatísticas.
- */
 async function fetchVeiculos({ silent = false } = {}) {
+    if (!state.user) return;
+
     if (!silent) showListState('loading');
     setConnection('pending', 'Sincronizando…');
     el.btnRefresh.classList.add('spinning');
@@ -106,11 +190,6 @@ async function fetchVeiculos({ silent = false } = {}) {
     }
 }
 
-/**
- * addVeiculo(event)
- * Previne o reload, valida os campos e envia ao Supabase via .insert().
- * Em caso de sucesso, limpa o formulário automaticamente.
- */
 async function addVeiculo(event) {
     event.preventDefault();
     hideError(el.formError);
@@ -132,7 +211,6 @@ async function addVeiculo(event) {
 
         if (error) throw error;
 
-        // Atualização otimista local + recarga silenciosa para garantir consistência
         state.lastInsertedId = data.id;
         state.veiculos.unshift(data);
         renderStats();
@@ -152,10 +230,6 @@ async function addVeiculo(event) {
     }
 }
 
-/**
- * updateStatus(id, novoStatus)
- * Alteração rápida de status diretamente na tabela via .update().
- */
 async function updateStatus(id, novoStatus, selectEl) {
     if (!STATUS_OPTIONS.includes(novoStatus)) return;
 
@@ -184,10 +258,6 @@ async function updateStatus(id, novoStatus, selectEl) {
     }
 }
 
-/**
- * updateVeiculo(id, dados)
- * Edição completa do registro (modal) via .update().
- */
 async function updateVeiculo(event) {
     event.preventDefault();
     hideError(el.editError);
@@ -225,10 +295,6 @@ async function updateVeiculo(event) {
     }
 }
 
-/**
- * deleteVeiculo(id)
- * Remove o registro via .delete() (após confirmação no modal).
- */
 async function deleteVeiculo(id) {
     setLoading(el.btnDeleteConfirm, true);
     try {
@@ -338,7 +404,7 @@ function showListState(which) {
 }
 
 // =====================================================================
-//  MODAIS
+//  MODAIS & UTILITÁRIOS
 // =====================================================================
 
 function openEditModal(id) {
@@ -372,10 +438,6 @@ function closeModal(modal) {
     document.body.classList.remove('modal-open');
 }
 
-// =====================================================================
-//  UTILITÁRIOS
-// =====================================================================
-
 function readForm(form, map) {
     const get = (sel) => form.querySelector(sel).value.trim();
     return {
@@ -388,7 +450,6 @@ function readForm(form, map) {
 }
 
 function normalizePlaca(placa) {
-    // Aceita "ABC1234", "abc-1234", "ABC1D23" (Mercosul) → "ABC-1234" / "ABC-1D23"
     const limpa = placa.toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (limpa.length === 7) return `${limpa.slice(0, 3)}-${limpa.slice(3)}`;
     return placa.toUpperCase();
@@ -410,11 +471,8 @@ function validateVeiculo(v, form) {
 function friendlyError(err) {
     if (!err) return 'Erro desconhecido.';
     if (err.code === '23505') return 'Já existe um veículo cadastrado com esta placa.';
-    if (err.code === '23514') return 'Valor de status inválido (permitidos: Ativo, Manutenção, Inativo).';
-    if (err.code === 'PGRST205' || /schema cache/i.test(err.message || '')) {
-        return 'A tabela "veiculos" não foi encontrada. Execute o script supabase_setup.sql no SQL Editor do Supabase.';
-    }
-    if (/Failed to fetch|NetworkError/i.test(err.message || '')) return 'Falha de rede ao contatar o Supabase. Verifique sua conexão.';
+    if (err.code === '23514') return 'Valor de status inválido.';
+    if (/Failed to fetch|NetworkError/i.test(err.message || '')) return 'Falha de rede ao contatar o Supabase.';
     return err.message || String(err);
 }
 
@@ -487,6 +545,9 @@ const debounce = (fn, ms = 200) => { let t; return (...a) => { clearTimeout(t); 
 //  EVENTOS E INICIALIZAÇÃO
 // =====================================================================
 
+el.formLogin.addEventListener('submit', handleLogin);
+el.btnLogout.addEventListener('click', handleLogout);
+
 el.form.addEventListener('submit', addVeiculo);
 el.formEdit.addEventListener('submit', updateVeiculo);
 el.btnRefresh.addEventListener('click', () => fetchVeiculos());
@@ -497,7 +558,7 @@ el.btnDeleteConfirm.addEventListener('click', () => state.deleteTarget && delete
 el.search.addEventListener('input', debounce((e) => { state.search = e.target.value; renderTable(); }));
 el.filterStatus.addEventListener('change', (e) => { state.filterStatus = e.target.value; renderTable(); });
 
-// Ações da tabela (delegação de eventos)
+// Delegação na tabela
 el.tbody.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action]');
     if (!btn || btn.tagName === 'SELECT') return;
@@ -510,24 +571,30 @@ el.tbody.addEventListener('change', (e) => {
     if (sel) updateStatus(sel.dataset.id, sel.value, sel);
 });
 
-// Fechar modais (backdrop, botões, ESC)
+// Fechar modais
 document.querySelectorAll('[data-close-modal]').forEach(b =>
     b.addEventListener('click', () => { closeModal(el.modalEdit); closeModal(el.modalDelete); }));
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { closeModal(el.modalEdit); closeModal(el.modalDelete); }
 });
 
-// Placa em caixa alta enquanto digita
+// Placa em caixa alta
 ['#placa', '#edit-placa'].forEach(sel => $(sel).addEventListener('input', (e) => {
     e.target.value = e.target.value.toUpperCase();
 }));
 
-// Tempo real: reflete alterações feitas por outros clientes/painel do Supabase
+// Realtime
 dbClient
     .channel('veiculos-realtime')
     .on('postgres_changes', { event: '*', schema: 'public', table: TABLE }, () => fetchVeiculos({ silent: true }))
     .subscribe();
 
-// Carregamento inicial + sincronização periódica (fallback caso Realtime esteja desativado)
-fetchVeiculos();
-setInterval(() => fetchVeiculos({ silent: true }), 60000);
+// Monitora o estado de autenticação (muda UI dinamicamente se logar/deslogar)
+dbClient.auth.onAuthStateChange((_event, session) => {
+    updateUIForAuth(session);
+});
+
+// Verificação da sessão inicial ao carregar a página
+dbClient.auth.getSession().then(({ data: { session } }) => {
+    updateUIForAuth(session);
+});
