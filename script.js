@@ -8,8 +8,8 @@
 //    Painel do Supabase → Project Settings → API
 //    A "anon key" é pública por definição; a segurança fica nas políticas RLS.
 // ---------------------------------------------------------------------
-const SUPABASE_URL = 'https://txfxdetqrgtvxegukorx.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR4ZnhkZXRxcmd0dnhlZ3Vrb3J4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxNjExMjgsImV4cCI6MjEwNTczNzEyOH0.bLgqMhRn6YMpZrdzLlkgHUvBKaD6Di3MUb-p5DDHid4';
+const SUPABASE_URL = 'https://yvehrnvjwrkiwloazybz.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl2ZWhybnZqd3JraXdsb2F6eWJ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxOTg0NDcsImV4cCI6MjEwODc3NDQ0N30.r8QmnePMgFPCbQPgAzSMAylwcDhcLcrvchHmHPTtA5U';
 
 const TABLE = 'veiculos';
 const STATUS_OPTIONS = ['Ativo', 'Manutenção', 'Inativo'];
